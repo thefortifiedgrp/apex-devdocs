@@ -1,0 +1,44 @@
+---
+title: Apex Telemed Developer Docs
+description: Integrate with the Apex Telemed platform — the Partner API, the survey embed SDK, and the partner-core site library.
+template: splash
+hero:
+  tagline: Everything you need to submit prescription requests, embed qualification surveys, and build patient portals on Apex Telemed.
+  actions:
+    - text: Get started
+      link: /getting-started/
+      icon: right-arrow
+    - text: Partner API reference
+      link: /api/
+      icon: open-book
+      variant: minimal
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+{/* MDX is not processed by the base-links plugin that rewrites Markdown links,
+    so hrefs on this page are built from BASE_URL explicitly. */}
+export const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+<CardGrid stagger>
+	<LinkCard
+		title="Partner API"
+		description="Server-to-server REST API. Create members and prescription requests, look up drugs and surveys, and receive webhooks as requests move through review."
+		href={`${base}/api/`}
+	/>
+	<LinkCard
+		title="Survey helper"
+		description="Embed the Apex qualification survey on your own site. A headless core with React and Solid adapters: you own the UI, Apex owns the medical logic."
+		href={`${base}/survey-helper/`}
+	/>
+	<LinkCard
+		title="Partner SDK (partner-core)"
+		description="Build a full patient portal, from signup through checkout, subscriptions, and dashboard, on a shared API client, stores, and headless flows."
+		href={`${base}/partner-sdk/`}
+	/>
+	<LinkCard
+		title="Choosing an integration"
+		description="Not sure which path fits? Compare the three integration surfaces and what each one asks of your team."
+		href={`${base}/getting-started/choosing-an-integration/`}
+	/>
+</CardGrid>
