@@ -52,7 +52,7 @@ Keep these consistent across pages:
 | Fact | Value |
 | --- | --- |
 | Production API base | `https://apextelemed.com/api` |
-| Sandbox API base | `https://apextelemed-dev.web.app/api` |
+| Sandbox API base | `https://dev.apextelemed.com/api` |
 | API key | `apx_` + 32 hex, header `x-api-key` |
 | Publishable key | `pk_` + 32 hex, header `x-apex-publishable-key`, origin allow-listed |
 | Tenant key (partner SDK) | header `x-tenant-key` |

@@ -38,7 +38,7 @@ The surfaces combine. Most integrations use the Partner API on the server and th
 Confirm your API key works by listing the drugs available to your partner account. Replace the key with the one shown in the partner portal under Settings.
 
 ```bash
-curl https://apextelemed-dev.web.app/api/v1/drugs \
+curl https://dev.apextelemed.com/api/v1/drugs \
   -H "x-api-key: apx_0123456789abcdef0123456789abcdef"
 ```
 

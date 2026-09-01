@@ -27,11 +27,11 @@ Building a full patient portal (signup, checkout, subscriptions) rather than emb
 
 You need three things from Apex before the survey will load:
 
-1. A **publishable key** (`pk_live_…` or `pk_test_…`). It is safe to ship in your client bundle. See [Authentication](/getting-started/authentication/).
+1. A **publishable key** (`pk_` followed by 32 hex characters). It is safe to ship in your client bundle. See [Authentication](/getting-started/authentication/).
 2. Your site's **origin on your allow-list**, for example `https://app.yourco.com`. Browser requests from any other origin are rejected.
 3. One or more **drug IDs** to compose the survey for, or a **returning-member token** for a refill flow.
 
-Keys and allow-lists are separate per environment. See [Environments](/getting-started/environments/).
+Keys and allow-lists are separate per environment. Point `apiBaseUrl` at `https://apextelemed.com/api` for production or `https://dev.apextelemed.com/api` for the sandbox, and use the key issued for that environment. See [Environments](/getting-started/environments/).
 
 :::tip
 Don't want any Apex key in the browser, or running a multi-tenant platform? Route the calls through your own backend instead. See [Authentication and modes](/survey-helper/auth-and-modes/).

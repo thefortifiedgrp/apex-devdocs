@@ -9,7 +9,7 @@ Apex runs two environments. They are fully separate deployments: separate data, 
 
 | Environment | API base URL | Use it for |
 | --- | --- | --- |
-| Sandbox | `https://apextelemed-dev.web.app/api` | Building and testing your integration. No real providers, pharmacies, or charges. |
+| Sandbox | `https://dev.apextelemed.com/api` | Building and testing your integration. No real providers, pharmacies, or charges. |
 | Production | `https://apextelemed.com/api` | Live patients. Real provider review, pharmacy fulfilment, and billing. |
 
 Every path in this documentation is relative to the API base URL. For example, `GET /v1/drugs` is `https://apextelemed.com/api/v1/drugs` in production.
