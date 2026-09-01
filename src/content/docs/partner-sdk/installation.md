@@ -129,7 +129,7 @@ render(
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `apiBase` | `string` | required | Base URL for partner-backend requests, without a trailing slash. Either a path such as `/api` (same-origin or proxied) or an absolute URL. Endpoint paths are appended directly. |
-| `tenantKey` | `string` | required | Sent as `X-Tenant-Key` on every backend request. Selects your tenant, its feature flags and its payment and Apex configuration. |
+| `tenantKey` | `string` | required | Sent as the `x-tenant-key` header on every backend request. Selects your tenant, its feature flags and its payment and Apex configuration. |
 | `storagePrefix` | `string` | required | Prefix for every localStorage and sessionStorage key the package writes. Pick one unique value per site. See [Storage keys](#storage-keys-and-storageprefix). |
 | `apexEmbedApiBase` | `string` | none | Base URL of the Apex v2 embedded survey API. Required by `useSurveyV2Flow`, `SurveyV2Page` and cross-device survey drafts; the hook throws without it. See [Survey connection modes](#survey-connection-modes). |
 | `apexPublishableKey` | `string` | none | Apex publishable key (`pk_` followed by 32 hex characters). Only needed for browser-direct survey embeds. Sent as `x-apex-publishable-key`. Safe to ship in client code. |
@@ -141,7 +141,7 @@ render(
 
 The embedded survey can reach Apex two ways. Both use the same hook and page; only the config differs.
 
-**Through the partner backend (default).** Point `apexEmbedApiBase` at the backend's Apex mount and omit the publishable key. The backend resolves your tenant from `X-Tenant-Key` and attaches its Apex credentials server-side, so no key reaches the browser and no Origin allow-list is involved. This needs your tenant's Apex credentials configured on the backend, which Apex does at provisioning.
+**Through the partner backend (default).** Point `apexEmbedApiBase` at the backend's Apex mount and omit the publishable key. The backend resolves your tenant from `x-tenant-key` and attaches its Apex credentials server-side, so no key reaches the browser and no Origin allow-list is involved. This needs your tenant's Apex credentials configured on the backend, which Apex does at provisioning.
 
 ```ts
 configure({
@@ -152,7 +152,7 @@ configure({
 });
 ```
 
-**Browser-direct.** Point `apexEmbedApiBase` at Apex and supply the publishable key. Apex validates the key against the Origin allow-list configured for your partner account. See [Auth and modes](/survey-helper/auth-and-modes/) and the [survey v2 embed API](/api/survey-v2-embed/).
+**Browser-direct.** Point `apexEmbedApiBase` at Apex and supply the publishable key. Apex validates the key against the Origin allow-list configured for your partner account. Sandbox (`https://dev.apextelemed.com/api`) and production (`https://apextelemed.com/api`) are separate deployments with separate credentials: a key belongs to one of them, and there is no test-mode key. See [Auth and modes](/survey-helper/auth-and-modes/) and the [survey v2 embed API](/api/survey-v2-embed/).
 
 ```ts
 configure({
@@ -252,7 +252,7 @@ if (promo) capturePromoCode(promo);
 VITE_API_BASE_URL=/api
 VITE_API_TARGET=https://api.example.com      # dev proxy target for /api
 VITE_TENANT_KEY=your-tenant-key
-# Only for browser-direct survey embeds:
+# Only for browser-direct survey embeds (sandbox base: https://dev.apextelemed.com/api):
 # VITE_APEX_EMBED_API_BASE=https://apextelemed.com/api
 # VITE_APEX_PUBLISHABLE_KEY=pk_0123456789abcdef0123456789abcdef
 ```

@@ -24,7 +24,7 @@ function apiFetch<T = unknown>(
 
 `apiFetch` is the patient-track transport every namespaced module uses. Given an endpoint path such as `/users/me`, it:
 
-- Prefixes `apiBase` from config and sets `X-Tenant-Key`.
+- Prefixes `apiBase` from config and sets the `x-tenant-key` header.
 - Sets `Content-Type: application/json` when the body is a string and no content type was given. Pass a `FormData` body for uploads and it is left alone.
 - Attaches `Authorization: Bearer <accessToken>` from patient token storage, unless `skipAuth` is set. Passing `authToken` sends that token for this one call instead, without touching stored tokens or the refresh path; the admin "view as customer" preview uses this with a short-lived impersonation token.
 - Attaches a reCAPTCHA v3 token as `X-Recaptcha-Token` on the auth and payment endpoints when the tenant has reCAPTCHA enabled. This is automatic: the backend tells the package whether reCAPTCHA is on and which site key to use, and the package loads Google's script only then. Sites write no reCAPTCHA code.

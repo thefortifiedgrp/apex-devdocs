@@ -7,7 +7,7 @@ sidebar:
 
 `@apextelemed/partner-core` is a SolidJS library for building patient-portal sites on the Apex Telemed platform. It ships the pieces every partner site needs and would otherwise rewrite: a typed API client, persistent auth and cart stores, headless flow hooks for signup, survey, checkout, subscriptions, dashboards and messaging, themed page components for those same flows, back-office portals (admin, member, affiliate), theme stylesheets, and a test kit that checks your site wired the package up correctly.
 
-The package talks to the Apex partner backend, a multi-tenant service operated by Apex. It owns your tenant's members, orders, subscriptions, payments, support threads and email, and it brokers the embedded survey and prescription requests with the Apex platform. Every request carries your tenant key in the `X-Tenant-Key` header, and the backend uses it to select your tenant. Your browser code never calls the Apex Partner API directly. If you need server-side access to members, requests or webhooks, see the [Partner API](/api/) section.
+The package talks to the Apex partner backend, a multi-tenant service operated by Apex. It owns your tenant's members, orders, subscriptions, payments, support threads and email, and it brokers the embedded survey and prescription requests with the Apex platform. Every request carries your tenant key in the `x-tenant-key` header, and the backend uses it to select your tenant. Your browser code never calls the Apex Partner API directly. If you need server-side access to members, requests or webhooks, see the [Partner API](/api/) section.
 
 The current published version is 0.3.0.
 
@@ -21,9 +21,9 @@ If you only need the medical questionnaire inside an existing site, the [survey 
 
 | Need | Details |
 | --- | --- |
-| A tenant on the Apex partner backend | Apex provisions the tenant and gives you its tenant key. The key is sent as `X-Tenant-Key` and selects your tenant's data, feature flags and payment configuration. A site cannot create a tenant. |
+| A tenant on the Apex partner backend | Apex provisions the tenant and gives you its tenant key. The key is sent as `x-tenant-key` and selects your tenant's data, feature flags and payment configuration. A site cannot create a tenant. |
 | The backend base URL | Provided with the tenant. In development you usually proxy `/api` to it from Vite so requests stay same-origin. |
-| Survey access | By default the embedded survey goes through the backend, which attaches your tenant's Apex credentials server-side. Only a browser-direct embed needs an Apex publishable key (`pk_` followed by 32 hex characters) and an Origin allow-list. See [Auth and modes](/survey-helper/auth-and-modes/). |
+| Survey access | By default the embedded survey goes through the backend, which attaches your tenant's Apex credentials server-side. Only a browser-direct embed needs an Apex publishable key (`pk_` followed by 32 hex characters) and an Origin allow-list. Sandbox and production are separate Apex deployments with separate keys. See [Auth and modes](/survey-helper/auth-and-modes/). |
 | Node and Solid | Node 18 or newer. `solid-js` 1.9 or newer as a peer dependency. Vite with `vite-plugin-solid` is the supported build. TypeScript 5 is recommended. |
 | Optional peers | `@playwright/test` 1.50 or newer to run the [seam suite](/partner-sdk/testing-your-site/). `@supabase/supabase-js` 2.x for live support-thread updates; without it the messages hook polls. |
 
