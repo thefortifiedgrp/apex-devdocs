@@ -88,7 +88,7 @@ The hook forwards `drugIds` exactly as given. `SurveyV2Page` adds a fallback cha
 
 ### `useSurveyFlow(options)` (deprecated)
 
-The v1 survey. It cannot compose until a medication has been chosen: it resolves its target from the cart or `medicationStore`, and otherwise reports `needs_medication_selection`. New sites should not use it; it remains for sites that have not migrated. It has no `@deprecated` marker in the type definitions yet, so nothing in your editor will warn you.
+The v1 survey. It cannot compose until a medication has been chosen: it resolves its target from the cart or `medicationStore`, and otherwise reports `needs_medication_selection`. New sites should not use it; it remains for sites that have not migrated. It carries an `@deprecated` marker pointing at `useSurveyV2Flow`, so your editor strikes through call sites.
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |

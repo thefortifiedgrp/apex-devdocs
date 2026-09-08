@@ -65,7 +65,7 @@ Every entry here is a failure that produces wrong behaviour rather than an error
 
 ### The survey is stuck on "pick a medication"
 
-You are on the deprecated v1 flow. `useSurveyFlow` and `SurveyPage` cannot compose a questionnaire until a medication sits in the cart or `medicationStore`, and otherwise report `needs_medication_selection`. Move the page to `SurveyV2Page` (or `useSurveyV2Flow`) and pass `drugIds` explicitly. v2 can also qualify a guest before an account exists, which v1 cannot. Neither v1 export carries a deprecation marker in its types yet, so your editor will not warn you.
+You are on the deprecated v1 flow. `useSurveyFlow` and `SurveyPage` cannot compose a questionnaire until a medication sits in the cart or `medicationStore`, and otherwise report `needs_medication_selection`. Move the page to `SurveyV2Page` (or `useSurveyV2Flow`) and pass `drugIds` explicitly. v2 can also qualify a guest before an account exists, which v1 cannot. Both v1 exports carry an `@deprecated` marker, so once you are on a build that includes it your editor strikes through every call site.
 
 ### `onComplete` fires but the member never saw the eligibility summary
 
