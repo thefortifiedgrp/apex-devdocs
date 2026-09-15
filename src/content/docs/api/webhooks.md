@@ -149,6 +149,7 @@ If you run behind a framework that parses JSON before your handler runs, configu
 | `delivery.update` | [Delivery](#delivery-events) | Any other pharmacy status update. |
 | `message.new` | [Message](#message-events) | A prescriber sends the patient a message. |
 | `message.system` | [Message](#message-events) | Apex posts a system message into an existing conversation. |
+| `message.handoff` | [Message](#message-events) | A prescriber hands a patient's non-clinical message off to your support team. |
 | `appointment.consultation_requested` | [Appointment](#appointment-events) | A booking link has been issued for the patient. |
 | `appointment.booked` | [Appointment](#appointment-events) | The patient booked a slot. |
 | `appointment.rescheduled` | [Appointment](#appointment-events) | The appointment was moved. |
@@ -280,7 +281,7 @@ Delivery events are best-effort. The request's `lineItems[].deliveryStatus`, `tr
 
 ### Message events
 
-Sent so that you can notify the patient in your own branding. Apex does not email patients directly. See [Messaging](/api/messaging/) for the conversation model.
+`message.new` and `message.system` are sent so that you can notify the patient in your own branding. Apex does not email patients directly. `message.handoff` is different: it passes a patient's message to your support team and has [its own payload](#messagehandoff). See [Messaging](/api/messaging/) for the conversation model.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -323,6 +324,47 @@ Apex posted an automated status message into an existing conversation: the presc
   "timestamp": "2026-09-02T09:31:02.118Z"
 }
 ```
+
+The system message Apex posts when a prescriber hands a message off to your support team does not send this event. You receive `message.handoff` instead.
+
+#### `message.handoff`
+
+A prescriber decided that a patient's message is not a clinical question (a billing or order query, for example) and handed it off to your support team from the provider portal. This is a routing instruction, not a notification to forward to the patient: put the message in your support queue and reply to the patient through your own support channel.
+
+When a message is handed off, Apex also:
+
+- Sets `handoffCategory` on the original message, readable from [`GET /v1/messages/conversations/:id/messages`](/api/messaging/#get-v1messagesconversationsidmessages).
+- Posts a system message into the conversation that tells the patient `Forwarded to <your account name> support — they'll reply in your Support conversation.` It increments `unreadByMember` like any system message.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `event` | string | `message.handoff`. |
+| `memberId` | string | Member UUID. |
+| `conversationId` | string | Conversation the message was handed off from. |
+| `messageId` | string | The original patient message. Matches its `id` in the conversation's messages. |
+| `text` | string | The original message text, verbatim. For an attachment, the file name; read the message back through the API for `attachmentUrl`. |
+| `category` | string | `billing`, `orders`, `account`, `technical`, or `other`, chosen by the prescriber. |
+| `prescriberName` | string | Display name of the prescriber who handed the message off. Omitted if unknown. |
+| `note` | string | Note from the prescriber to your support team, up to 500 characters. Omitted when the prescriber left none. |
+| `timestamp` | string | ISO 8601. |
+
+There is no `messagePreview`, `messageHtml`, or `subject` on this event.
+
+```json
+{
+  "event": "message.handoff",
+  "memberId": "6d3a9f2e-4b1c-4e7a-9c2d-1f8e5a7b3c90",
+  "conversationId": "9e2b7c41-3f5a-4d8e-b6c0-7a1f2e3d4c55",
+  "messageId": "3c2b1a0f-9e8d-4c7b-a6f5-4e3d2c1b0a95",
+  "text": "I was charged twice for my last order. Can someone look into it?",
+  "category": "billing",
+  "prescriberName": "Dr. Priya Natarajan",
+  "note": "Duplicate charge on the September refill.",
+  "timestamp": "2026-09-03T15:12:09.481Z"
+}
+```
+
+Apex does not prevent the same message from being handed off more than once. Treat `messageId` as the key when you create a support ticket so a repeat does not open a second one.
 
 ### Appointment events
 

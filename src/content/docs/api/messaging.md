@@ -17,9 +17,11 @@ All endpoints on this page are mounted under `https://apextelemed.com/api/v1/mes
 
 **Apex also posts system messages.** When a prescriber approves, denies, or requests a consultation for a request, or completes a visit without prescribing, Apex adds a short `senderRole: "system"` message to the conversation between that member and that prescriber. System messages are only added if the conversation already exists.
 
-**Getting the prescriber's ID.** The prescriber is whoever acted on the member's request. Read `lineItems[].prescriberId` from [`GET /v1/requests/:id`](/api/requests/). It is `null` until a prescriber has acted on the item, so you cannot open a conversation for a request that nobody has reviewed yet.
+**Opening a conversation.** If you only know the member, call [`POST /v1/messages/conversations/for-member`](#post-v1messagesconversationsfor-member) and Apex resolves the member's current prescriber from their requests. It returns `409` while no prescriber has been assigned to any of the member's requests. If you track the prescriber yourself, call [`POST /v1/messages/conversations`](#post-v1messagesconversations) with an explicit `prescriberId`, read from `lineItems[].prescriberId` on [`GET /v1/requests/:id`](/api/requests/). That field is `null` until a prescriber has acted on the item.
 
 **Knowing when the prescriber replies.** Apex sends a [`message.new`](/api/webhooks/#messagenew) webhook whenever a prescriber sends a message, and a [`message.system`](/api/webhooks/#messagesystem) webhook for system messages. Use these to email the patient with your own branding. Apex does not email patients directly.
+
+**Handoffs to your support team.** A prescriber can route a patient message that is not a clinical question (billing, orders, account, technical, or other) out of the conversation to you. Apex sets `handoffCategory` on the original message, posts a system message telling the patient that your support team will reply, and sends you a [`message.handoff`](/api/webhooks/#messagehandoff) webhook with the original text. Route it to your own support queue. No `message.system` webhook is sent for that system message.
 
 **Polling.** There is no push channel to your patient UI. While the patient has their inbox open, poll [`GET /v1/messages/unread-count`](#get-v1messagesunread-count) for the badge and [`GET /v1/messages/conversations`](#get-v1messagesconversations) for the thread list. A poll interval of 30 to 60 seconds is appropriate; use the webhooks, not polling, to trigger notifications.
 
@@ -62,15 +64,80 @@ All endpoints on this page are mounted under `https://apextelemed.com/api/v1/mes
 | `attachmentName` | string \| null | Original file name. |
 | `attachmentType` | string \| null | MIME type. |
 | `attachmentSize` | integer \| null | Size in bytes. |
+| `handoffCategory` | string \| null | `billing`, `orders`, `account`, `technical`, or `other` when a prescriber has handed this patient message off to your support team. See [`message.handoff`](/api/webhooks/#messagehandoff). |
 | `createdAt` | string | ISO 8601 timestamp. |
 
 Fields that do not apply to a message are `null` when read back and omitted from the response to the call that created the message.
 
 ## Endpoints
 
+### `POST /v1/messages/conversations/for-member`
+
+Finds or creates the conversation between a member and their current prescriber. Use it when you know the member but not the prescriber, which is the usual case.
+
+Apex resolves the prescriber from the member's requests, newest first:
+
+1. The prescriber assigned to the newest request whose `status` is not `denied` or `cancelled`.
+2. If every request that has a prescriber is `denied` or `cancelled`, the prescriber assigned to the newest of those.
+3. If no request has ever had a prescriber assigned, the call fails with `409`. Apex does not guess.
+
+A prescriber is assigned to a request when they pick it up for review or act on one of its items. The `status` checked is the stored request status that [`GET /v1/requests`](/api/requests/) reports.
+
+Because a conversation belongs to one member and one prescriber, this endpoint returns a different conversation once the member's current prescriber changes. Earlier threads remain available from [`GET /v1/messages/conversations`](#get-v1messagesconversations).
+
+**Request body**
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `memberId` | string | Yes | One of your members. |
+
+```bash
+curl -X POST https://apextelemed.com/api/v1/messages/conversations/for-member \
+  -H "x-api-key: $APEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "memberId": "6d3a9f2e-4b1c-4e7a-9c2d-1f8e5a7b3c90" }'
+```
+
+**Response**
+
+`201 Created` when a new conversation was created, `200 OK` when an existing one was returned. The body is the same shape in both cases: the [conversation](#conversation) plus a `created` boolean.
+
+```json
+{
+  "conversation": {
+    "id": "9e2b7c41-3f5a-4d8e-b6c0-7a1f2e3d4c55",
+    "memberId": "6d3a9f2e-4b1c-4e7a-9c2d-1f8e5a7b3c90",
+    "memberName": "Jordan Rivera",
+    "memberEmail": "jordan.rivera@example.com",
+    "prescriberId": "a1c4e8b2-7d6f-4e3a-9b0c-2f5d8e1a7c44",
+    "prescriberName": "Dr. Priya Natarajan",
+    "partnerId": "0b7c4d21-9e3f-4a6b-8d15-2c4e6f8a0b13",
+    "lastMessageAt": "2026-09-02T09:20:14.007Z",
+    "lastMessagePreview": "",
+    "lastMessageSenderId": "",
+    "unreadByMember": 0,
+    "unreadByPrescriber": 0,
+    "createdAt": "2026-09-02T09:20:14.007Z",
+    "updatedAt": "2026-09-02T09:20:14.007Z"
+  },
+  "created": true
+}
+```
+
+**Errors**
+
+| Status | Body | When |
+| --- | --- | --- |
+| 400 | `{ "error": "Required" }` | `memberId` is missing. |
+| 400 | `{ "error": "memberId is required" }` | `memberId` is an empty string. |
+| 401 | `{ "error": "API Key missing" }` or `{ "error": "Invalid API Key" }` | Authentication failed. |
+| 403 | `{ "error": "Member does not belong to this partner" }` | The member exists but is not yours. |
+| 404 | `{ "error": "Member not found" }` | Unknown `memberId`. |
+| 409 | `{ "error": "no_prescriber_assigned" }` | None of the member's requests has ever had a prescriber assigned, including when the member has no requests. Try again after a prescriber picks up the member's request. |
+
 ### `POST /v1/messages/conversations`
 
-Finds or creates the conversation between a member and a prescriber.
+Finds or creates the conversation between a member and a specific prescriber. Prefer [`for-member`](#post-v1messagesconversationsfor-member) unless you track the prescriber yourself.
 
 **Request body**
 
@@ -118,7 +185,8 @@ curl -X POST https://apextelemed.com/api/v1/messages/conversations \
 
 | Status | Body | When |
 | --- | --- | --- |
-| 400 | `{ "error": "memberId is required" }` | Missing or empty `memberId`. The message names whichever field failed first. |
+| 400 | `{ "error": "Required" }` | `memberId` or `prescriberId` is missing. |
+| 400 | `{ "error": "memberId is required" }` | Empty `memberId`. The message names whichever field failed first. |
 | 401 | `{ "error": "API Key missing" }` or `{ "error": "Invalid API Key" }` | Authentication failed. |
 | 403 | `{ "error": "Member does not belong to this partner" }` | The member exists but is not yours. |
 | 404 | `{ "error": "Member not found" }` | Unknown `memberId`. |
