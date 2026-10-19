@@ -511,6 +511,8 @@ curl https://apextelemed.com/api/v1/requests/3f2c9c1e-8d7a-4b2f-9e64-1c5a7d0b2f1
       ],
       "pharmacySent": true,
       "pharmacySentAt": "2026-08-21T09:15:41.316Z",
+      "pharmacyName": "New Life Pharmacy",
+      "pharmacyOrderNumber": "448812",
       "trackingNumber": "1Z999AA10123456784",
       "shipCarrier": "UPS",
       "deliveryStatus": "Rx Shipping Pickup"
@@ -576,6 +578,8 @@ The `drug` objects and the `prescriptionRecords` entry above are abbreviated. In
 | `status` | string | Line item status. |
 | `prescriberId` | string or null | Opaque identifier of the prescriber who acted on the item. |
 | `pharmacyId` | string or null | Identifier of the pharmacy that will fill the prescription. |
+| `pharmacyName` | string or null | Display name of that pharmacy. |
+| `pharmacyOrderNumber` | string or null | The pharmacy's own order number for this prescription, as returned when it was transmitted. `null` until `pharmacySent` is `true`. Quote it when contacting the pharmacy about an order. |
 | `prescription` | object or null | The prescription as signed: `dosage` (SKU label), `quantity`, `daysSupply`, `directions`, `refills`, `dispenseAsWritten`, `unit`, `form`, `route`, `classification`, `deaSchedule`, `expirationDate`, and `prescriptionId`. `null` until approved. |
 | `prescriptionRecord` | object or null | The immutable prescription record. See [Prescription record fields](#prescription-record-fields). `null` until approved. |
 | `history` | object[] | Item-level audit trail. |
