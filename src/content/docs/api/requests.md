@@ -59,6 +59,32 @@ If an automatic transmission fails, the item stays `approved` with `pharmacySent
 
 After transmission the pharmacy reports progress back to Apex. Those updates appear on the line item as `deliveryStatus`, `trackingNumber`, and `shipCarrier`, and reach your webhook as `item.shipped` the first time an order is marked shipped and `delivery.update` for other status changes. `deliveryStatus` is the pharmacy's own status string and varies by pharmacy; treat it as informational. The item status remains `approved` throughout.
 
+Once a package has a tracking number, Apex also follows it with the carrier. The carrier's view appears on the line item as `carrierStatus`, `carrierStatusAt`, and `deliveredAt`, separate from `deliveryStatus`, and the first delivery scan sends [`item.delivered`](/api/webhooks/#delivery-events) to your webhook.
+
+| `carrierStatus` | Meaning |
+| --- | --- |
+| `pre_transit` | The carrier has a label but has not received the package. |
+| `in_transit` | The package is moving through the carrier's network. |
+| `delivered` | The carrier reports the package delivered. |
+| `returned` | The package is being returned to the sender. |
+| `failed` | The carrier reports a delivery failure. |
+| `null` | No carrier status yet, or the package is not tracked. Apex can track UPS, FedEx, and USPS tracking numbers. |
+
+`deliveredAt` is set the first time the carrier reports delivery and is never cleared, even if the package is later returned.
+
+`fulfillmentStatus` summarises where an approved item is on its way to the patient. It is `null` until the item is `approved`.
+
+| `fulfillmentStatus` | Meaning |
+| --- | --- |
+| `not_sent` | Approved but not yet transmitted to the pharmacy. |
+| `scheduled` | Waiting for the request's `pharmacySendAt`. |
+| `awaiting_order` | Deferred account: waiting for you to call `send-to-pharmacy`. |
+| `held` | Apex held the transmission back. Apex follows it up. |
+| `failed` | Transmission failed, or the pharmacy reports the order voided, returned, or cancelled. |
+| `sent` | Transmitted to the pharmacy. |
+| `shipped` | The pharmacy reports the package shipped. |
+| `delivered` | The carrier, or the pharmacy, reports the package delivered. Once the carrier reports `delivered`, no pharmacy status changes it. |
+
 ### Request-level status
 
 `status` on a request is computed from its line items each time you read it.
@@ -302,7 +328,7 @@ Lists your requests, newest first, with optional filters.
 | --- | --- | --- | --- |
 | `startDate` | string | none | Include requests created at or after this date. Use `YYYY-MM-DD` or a full ISO 8601 timestamp. |
 | `endDate` | string | none | Include requests created up to the end of this day. |
-| `status` | string | none | One of `pending`, `approved`, `denied`, `call_requested`, `completed`, `cancelled`. Matches a request when any of its line items has that status. |
+| `status` | string | none | One of `pending`, `approved`, `denied`, `call_requested`, `completed`, `cancelled`. Matches a request when any of its line items has exactly that `status`, as the line item reports it. An item waiting on a consultation reports `call_requested`, so it matches `status=call_requested` and not `status=pending`. |
 | `page` | integer | `1` | Page number, starting at 1. |
 | `limit` | integer | `20` | Results per page, 1 to 100. |
 
@@ -332,7 +358,11 @@ curl "https://apextelemed.com/api/v1/requests?status=approved&startDate=2026-08-
           "prescriberId": "7d0e4a2b-1c3f-4e5a-9b8c-2d1e0f9a8b7c",
           "trackingNumber": "1Z999AA10123456784",
           "shipCarrier": "UPS",
-          "deliveryStatus": "Rx Shipping Pickup"
+          "deliveryStatus": "Rx Shipping Pickup",
+          "carrierStatus": "in_transit",
+          "carrierStatusAt": "2026-08-22T13:05:00.000Z",
+          "deliveredAt": null,
+          "fulfillmentStatus": "shipped"
         }
       ],
       "itemCount": 1,
@@ -364,24 +394,29 @@ curl "https://apextelemed.com/api/v1/requests?status=approved&startDate=2026-08-
 | `lineItems[].trackingNumber` | string or null | Shipment tracking number once the pharmacy reports it. |
 | `lineItems[].shipCarrier` | string or null | Carrier name once known. |
 | `lineItems[].deliveryStatus` | string or null | Pharmacy-reported delivery status. |
+| `lineItems[].carrierStatus` | string or null | The carrier's tracking status: `pre_transit`, `in_transit`, `delivered`, `returned`, or `failed`. `null` until the carrier reports one. See [Shipping updates](#shipping-updates). |
+| `lineItems[].carrierStatusAt` | string or null | When the carrier reported `carrierStatus`. |
+| `lineItems[].deliveredAt` | string or null | When the carrier first reported the package delivered. Never cleared once set. |
+| `lineItems[].fulfillmentStatus` | string or null | Where an approved item is on its way, from `not_sent` to `delivered`. `null` unless the item is `approved`. See [Shipping updates](#shipping-updates). |
 | `itemCount` | number | Number of line items. |
 | `statusSummary` | string | Human-readable status count. |
 | `status` | string | Derived request-level status. See [Request-level status](#request-level-status). |
 | `createdAt` | string | Creation timestamp. |
 | `updatedAt` | string | Last update timestamp. |
 
-Requests that have no line items, which are consultation requests that have not been approved yet and requests created before line items existed, are returned in a compatibility shape. They carry the stored `status`, top-level `drugId`, `prescriptionName`, and `dosage` fields, `itemCount: 1`, a `statusSummary` such as `1 drug - pending`, and a single synthesised `lineItems` entry whose `itemId` equals the request `id`.
+Requests that have no line items, which are consultation requests that have not been approved yet and requests created before line items existed, are returned in a compatibility shape. They carry the stored `status`, top-level `drugId`, `prescriptionName`, and `dosage` fields, `itemCount: 1`, a `statusSummary` such as `1 drug - pending`, and a single synthesised `lineItems` entry whose `itemId` equals the request `id`. That entry carries the shipping fields (`trackingNumber`, `shipCarrier`, `deliveryStatus`, `carrierStatus`, `carrierStatusAt`, `deliveredAt`) but no `fulfillmentStatus`.
 
 **Errors**
 
 | Status | `error` | When |
 | --- | --- | --- |
 | `400` | Array of validation issues | `status` is not one of the allowed values, or `page` or `limit` is out of range. |
+| `400` | `Invalid date: <value>` | `startDate` or `endDate` cannot be parsed as a date. |
 | `500` | `Internal Server Error` | Unexpected failure. |
 
 **Behaviour**
 
-- Filters are applied after your entire request history is loaded, so `total` reflects matching requests only.
+- Filters apply across your entire request history before paging, so `pagination.total` counts every matching request.
 - `endDate` is inclusive to the end of that calendar day.
 - Results are ordered by `createdAt` descending. There is no cursor; use `page` and `limit`.
 - The list omits case notes, prescription details, and the full member record. Fetch a single request for those.
@@ -515,7 +550,11 @@ curl https://apextelemed.com/api/v1/requests/3f2c9c1e-8d7a-4b2f-9e64-1c5a7d0b2f1
       "pharmacyOrderNumber": "448812",
       "trackingNumber": "1Z999AA10123456784",
       "shipCarrier": "UPS",
-      "deliveryStatus": "Rx Shipping Pickup"
+      "deliveryStatus": "Rx Shipping Pickup",
+      "carrierStatus": "in_transit",
+      "carrierStatusAt": "2026-08-22T13:05:00.000Z",
+      "deliveredAt": null,
+      "fulfillmentStatus": "shipped"
     }
   ],
   "itemCount": 1,
@@ -586,6 +625,8 @@ The `drug` objects and the `prescriptionRecords` entry above are abbreviated. In
 | `pharmacySent` | boolean | `true` once the prescription has been transmitted to the pharmacy. |
 | `pharmacySentAt` | string or null | When it was transmitted. |
 | `trackingNumber`, `shipCarrier`, `deliveryStatus` | string or null | Shipping details reported by the pharmacy. |
+| `carrierStatus`, `carrierStatusAt`, `deliveredAt` | string or null | The carrier's tracking status, when it was reported, and when the carrier first reported delivery. See [Shipping updates](#shipping-updates). |
+| `fulfillmentStatus` | string or null | Where an approved item is on its way. `null` unless the item is `approved`; absent on a legacy request's synthesised entry. See [Shipping updates](#shipping-updates). |
 
 #### Prescription record fields
 
