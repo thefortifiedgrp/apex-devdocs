@@ -52,7 +52,7 @@ To verify:
 1. Read the raw request body as bytes. Do not parse and re-serialise it; any change in whitespace or key order breaks the signature.
 2. Compute `HMAC_SHA256(secret, timestamp + "." + rawBody)` and hex-encode it.
 3. Compare `"sha256=" + yourDigest` with the `X-Webhook-Signature` header using a constant-time comparison.
-4. Reject deliveries whose timestamp is too far from your clock. Five minutes is a reasonable tolerance; retries reuse the original timestamp but arrive within seconds of it.
+4. Reject deliveries whose timestamp is too far from your clock. Five minutes is a reasonable tolerance; every attempt, retries included, is signed with a fresh timestamp.
 5. Only then parse the JSON.
 
 ### Node.js example
@@ -120,11 +120,11 @@ If you run behind a framework that parses JSON before your handler runs, configu
 
 **Failures are retried three times, then dropped.** A non-2xx response or a connection error counts as a failure. Apex makes up to 3 attempts per event, waiting 2 seconds after the first failure and 4 seconds after the second. If the third attempt fails, the event is discarded. There is no dead-letter queue, no automatic replay later, and no partner-facing log of failed deliveries. If your endpoint has been down for longer than the retry window, reconcile by reading requests back through the API.
 
-**No explicit timeout.** Apex does not enforce a short application-level timeout on the request, but you should still respond within a few seconds so retries do not pile up behind slow handlers.
+**Each attempt times out after 10 seconds.** An attempt that gets no response within 10 seconds counts as a failure and is retried. Respond within a few seconds, and process the event afterwards.
 
 **Ordering is not guaranteed.** Events are dispatched as they happen, each on its own connection, and are not serialised per request or per member. Closely related events such as `item.approved` and `request.all_approved`, or `item.consultation_requested` and `appointment.consultation_requested`, can arrive in either order. Design handlers to be order-independent: treat each event as a hint to re-read the current state of the request rather than as an incremental state transition.
 
-**Duplicates are possible.** A retry after a timeout on your side delivers the same body again with the same timestamp and signature. Some aggregate events can also be sent more than once for the same request (see [`request.all_approved`](#aggregate-request-events)). Because there is no delivery ID, dedupe on a hash of the raw body, or on `event` plus the relevant IDs plus `timestamp`.
+**Duplicates are possible.** A retry after a timeout on your side delivers the same body again, with a new timestamp and signature. Some aggregate events can also be sent more than once for the same request (see [`request.all_approved`](#aggregate-request-events)). Because there is no delivery ID, dedupe on a hash of the raw body (which is identical across retries), or on `event` plus the relevant IDs and the payload's own `timestamp` field. Don't use the `X-Webhook-Timestamp` header: it changes on every attempt.
 
 **One URL per account.** All event types are sent to the same URL. There is no per-event subscription; ignore what you do not need.
 
