@@ -150,4 +150,4 @@ Partner API responses carry permissive CORS headers, but the API is designed for
 2. Create a member with `POST /v1/members`, or supply the member inline on the request.
 3. Submit `POST /v1/requests` with one drug per request.
 4. Receive `item.approved`, `item.denied`, or `item.consultation_requested` on your webhook endpoint.
-5. Track fulfilment through `pharmacySent` on the line item, then `item.shipped` with tracking details.
+5. Track fulfilment through `pharmacySent` on the line item, then `item.shipped` with tracking details, then `item.delivered` when the carrier confirms delivery.

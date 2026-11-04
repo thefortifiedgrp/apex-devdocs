@@ -1,6 +1,6 @@
 ---
 title: Webhooks
-description: Receive signed HTTP notifications from Apex when requests are reviewed, prescriptions ship, prescribers message patients, appointments change, and surveys are completed.
+description: Receive signed HTTP notifications from Apex when requests are reviewed, prescriptions ship and arrive, prescribers message patients, appointments change, and surveys are completed.
 sidebar:
   order: 8
 ---
@@ -52,7 +52,7 @@ To verify:
 1. Read the raw request body as bytes. Do not parse and re-serialise it; any change in whitespace or key order breaks the signature.
 2. Compute `HMAC_SHA256(secret, timestamp + "." + rawBody)` and hex-encode it.
 3. Compare `"sha256=" + yourDigest` with the `X-Webhook-Signature` header using a constant-time comparison.
-4. Reject deliveries whose timestamp is too far from your clock. Five minutes is a reasonable tolerance; retries reuse the original timestamp but arrive within seconds of it.
+4. Reject deliveries whose timestamp is too far from your clock. Five minutes is a reasonable tolerance; every attempt, retries included, is signed with a fresh timestamp.
 5. Only then parse the JSON.
 
 ### Node.js example
@@ -120,11 +120,11 @@ If you run behind a framework that parses JSON before your handler runs, configu
 
 **Failures are retried three times, then dropped.** A non-2xx response or a connection error counts as a failure. Apex makes up to 3 attempts per event, waiting 2 seconds after the first failure and 4 seconds after the second. If the third attempt fails, the event is discarded. There is no dead-letter queue, no automatic replay later, and no partner-facing log of failed deliveries. If your endpoint has been down for longer than the retry window, reconcile by reading requests back through the API.
 
-**No explicit timeout.** Apex does not enforce a short application-level timeout on the request, but you should still respond within a few seconds so retries do not pile up behind slow handlers.
+**Each attempt times out after 10 seconds.** An attempt that gets no response within 10 seconds counts as a failure and is retried. Respond within a few seconds, and process the event afterwards.
 
 **Ordering is not guaranteed.** Events are dispatched as they happen, each on its own connection, and are not serialised per request or per member. Closely related events such as `item.approved` and `request.all_approved`, or `item.consultation_requested` and `appointment.consultation_requested`, can arrive in either order. Design handlers to be order-independent: treat each event as a hint to re-read the current state of the request rather than as an incremental state transition.
 
-**Duplicates are possible.** A retry after a timeout on your side delivers the same body again with the same timestamp and signature. Some aggregate events can also be sent more than once for the same request (see [`request.all_approved`](#aggregate-request-events)). Because there is no delivery ID, dedupe on a hash of the raw body, or on `event` plus the relevant IDs plus `timestamp`.
+**Duplicates are possible.** A retry after a timeout on your side delivers the same body again, with a new timestamp and signature. Some aggregate events can also be sent more than once for the same request (see [`request.all_approved`](#aggregate-request-events)). Because there is no delivery ID, dedupe on a hash of the raw body (which is identical across retries), or on `event` plus the relevant IDs and the payload's own `timestamp` field. Don't use the `X-Webhook-Timestamp` header: it changes on every attempt.
 
 **One URL per account.** All event types are sent to the same URL. There is no per-event subscription; ignore what you do not need.
 
@@ -147,6 +147,7 @@ If you run behind a framework that parses JSON before your handler runs, configu
 | `request.consultation_requested` | [Legacy request-level](#legacy-request-level-events) | Single-prescription review flow: consultation requested. |
 | `item.shipped` | [Delivery](#delivery-events) | The pharmacy reports the package has left. |
 | `delivery.update` | [Delivery](#delivery-events) | Any other pharmacy status update. |
+| `item.delivered` | [Delivery](#delivery-events) | The carrier reports the package delivered. |
 | `message.new` | [Message](#message-events) | A prescriber sends the patient a message. |
 | `message.system` | [Message](#message-events) | Apex posts a system message into an existing conversation. |
 | `message.handoff` | [Message](#message-events) | A prescriber hands a patient's non-clinical message off to your support team. |
@@ -247,18 +248,19 @@ You cannot control which flow a prescriber uses, so handle both families. A robu
 
 ### Delivery events
 
-Sent when the pharmacy reports a fulfilment status for a prescription.
+`item.shipped` and `delivery.update` are sent when the pharmacy reports a fulfilment status for a prescription. `item.delivered` is sent when the carrier reports the package delivered.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `event` | string | `item.shipped` or `delivery.update`. |
+| `event` | string | `item.shipped`, `delivery.update`, or `item.delivered`. |
 | `requestId` | string | Request UUID. |
 | `memberId` | string | Member UUID. Omitted if the request has no member. |
 | `itemId` | string | Line item UUID. Omitted for requests without line items. |
-| `status` | string | The pharmacy's own status label, passed through as received. |
+| `status` | string | The pharmacy's own status label, passed through as received. Always `delivered` on `item.delivered`. |
 | `trackingNumber` | string | Carrier tracking number, when the pharmacy has provided one. Omitted otherwise. |
 | `shipCarrier` | string | Carrier name, when provided. Omitted otherwise. |
 | `daysSupply` | integer | Days' supply of the shipped fill, from the prescription. Omitted when the item has no prescription record. Use it to schedule the next refill check-in. |
+| `deliveredAt` | string | `item.delivered` only. When the carrier reports the package was delivered, ISO 8601. |
 | `timestamp` | string | ISO 8601. |
 
 ```json
@@ -277,7 +279,26 @@ Sent when the pharmacy reports a fulfilment status for a prescription.
 
 `item.shipped` is sent once, when a fill first reaches a shipped state at the pharmacy. Every other pharmacy update, before or after shipping, arrives as `delivery.update`. Because `status` is pharmacy-specific free text (examples seen in practice include `received`, `processing`, `label created`, `in transit`, `delivered`, `returned`, and `Rx Shipping Pickup`), branch on the event name and use `status` for display only.
 
-Delivery events are best-effort. The request's `lineItems[].deliveryStatus`, `trackingNumber`, and `shipCarrier` fields carry the same information and are the reliable place to read it back.
+`item.delivered` is sent once per line item, the first time the carrier reports the package delivered. After a package ships, Apex follows its tracking number with the carrier. A package that is delivered, returned, and delivered again does not produce a second `item.delivered`. Apex can follow UPS, FedEx, and USPS tracking numbers; a package with another carrier, or one Apex could not start tracking, never produces `item.delivered`.
+
+```json
+{
+  "event": "item.delivered",
+  "requestId": "c2f1e7a9-5d3b-4f80-a6e1-9b8c7d6e5f40",
+  "memberId": "6d3a9f2e-4b1c-4e7a-9c2d-1f8e5a7b3c90",
+  "itemId": "5a8b3c1d-2e4f-4a6b-8c9d-0e1f2a3b4c5d",
+  "status": "delivered",
+  "trackingNumber": "9400111899223197428490",
+  "shipCarrier": "USPS",
+  "daysSupply": 30,
+  "deliveredAt": "2026-09-07T18:44:00.000Z",
+  "timestamp": "2026-09-07T18:51:12.304Z"
+}
+```
+
+Like every event, `item.delivered` is retried on failure and can reach you more than once. Handle it idempotently, for example by ignoring it when you have already recorded a delivery for that `requestId` and `itemId`.
+
+Delivery events are best-effort. The request's `lineItems[].deliveryStatus`, `trackingNumber`, `shipCarrier`, `carrierStatus`, and `deliveredAt` fields carry the same information and are the reliable place to read it back. See [Shipping updates](/api/requests/#shipping-updates).
 
 ### Message events
 
